@@ -1,0 +1,246 @@
+// Isaac Gurney
+// 2/10/2023
+// CSE 122
+// P2 Absurdle
+// Ronald Lin
+
+// This class functions like a game of wordle, except with each guess, the class 
+// intentionally presents the user with the pattern that gives the least amount 
+// of information, until finally the user guesses the correct word from provided "dictionaries".
+
+import java.util.*;
+import java.io.*;
+
+public class Absurdle  {
+    public static final String GREEN = "🟩";
+    public static final String YELLOW = "🟨";
+    public static final String GRAY = "⬜";
+
+    // [[ ALL OF MAIN PROVIDED ]]
+    public static void main(String[] args) throws FileNotFoundException {
+        Scanner console = new Scanner(System.in);
+        System.out.println("Welcome to the game of Absurdle.");
+
+        System.out.print("What dictionary would you like to use? ");
+        String dictName = console.next();
+
+        System.out.print("What length word would you like to guess? ");
+        int wordLength = console.nextInt();
+
+        List<String> contents = loadFile(new Scanner(new File(dictName)));
+        Set<String> words = pruneDictionary(contents, wordLength);
+
+        List<String> guessedPatterns = new ArrayList<>();
+        while (!isFinished(guessedPatterns)) {
+            System.out.print("> ");
+            String guess = console.next();
+            String pattern = record(guess, words, wordLength);
+            guessedPatterns.add(pattern);
+            System.out.println(": " + pattern);
+            System.out.println();
+        }
+        System.out.println("Absurdle " + guessedPatterns.size() + "/∞");
+        System.out.println();
+        printPatterns(guessedPatterns);
+    }
+    
+
+    // [[ PROVIDED ]]
+    // Prints out the given list of patterns.
+    // - List<String> patterns: list of patterns from the game
+    public static void printPatterns(List<String> patterns) {
+        for (String pattern : patterns) {
+            System.out.println(pattern);
+        }
+    }
+
+
+    // [[ PROVIDED ]]
+    // Returns true if the game is finished, meaning the user guessed the word. Returns
+    // false otherwise.
+    // - List<String> patterns: list of patterns from the game
+    public static boolean isFinished(List<String> patterns) {
+        if (patterns.isEmpty()) {
+            return false;
+        }
+        String lastPattern = patterns.get(patterns.size() - 1);
+        return !lastPattern.contains("⬜") && !lastPattern.contains("🟨");
+    }
+
+
+    // [[ PROVIDED ]]
+    // Loads the contents of a given file Scanner into a List<String> and returns it.
+    // - Scanner dictScan: contains file contents
+    public static List<String> loadFile(Scanner dictScan) {
+        List<String> contents = new ArrayList<>();
+        while (dictScan.hasNext()) {
+            contents.add(dictScan.next());
+        }
+        return contents;
+    }
+
+
+    //B - this method goes through the user provided dictionary and 
+    // removes all the words that aren't of the specified length.
+    //E - if the length of user-specified word is less than one, 
+    // method exits the program with an IllegalArgumentException
+    //R - returns a Set of String which is a set of 
+    //all words from the dictionary with length of word equal to 
+    // what the user specified
+    //P - takes List<String> contents as the "dictionary" to prune from, 
+    //and int wordLength which is how the user specifies the length of word they wish to use
+    public static Set<String> pruneDictionary(List<String> contents, int wordLength) {
+        if (wordLength < 1) {
+            throw new IllegalArgumentException ("Input Word Length too Small");
+        }
+
+        Set<String> prunedDictionary = new HashSet<>();
+
+        for (int i = 0; i < contents.size(); i++) {
+            String currentWord = contents.get(i);
+            if (currentWord.length() == wordLength) {
+                prunedDictionary.add(currentWord);
+            }
+        }
+        return prunedDictionary;   
+    }
+
+
+    //B - finds the pattern that gives the least possible information to the user
+    //E - if the pruned dictionary passed to this method is empty, or the user makes 
+    // updates the dictionary by removing words that aren't contained by the
+    // pattern this method returns
+    // a guess that differs in length to their specified wordLength, this method 
+    // throws an IllegalArgumentException. 
+    //R - returns a String, which is a string of emojis to be printed off in main
+    //P - takes String guess, Set<String> words, int wordLength. Guess is the user's guess, 
+    // words is the "dictionary" of possible words, and wordLength is the user's specified length of word.
+    public static String record(String guess, Set<String> words, int wordLength) {
+        
+        if (words.isEmpty() || guess.length() != wordLength) {
+            throw new IllegalArgumentException ("Dictionary Empty or Incorrect Guess Length");
+        }
+     
+        Map<String, Set<String>> patternWordMap = new TreeMap<>();
+
+        for (String currentWord : words) {
+            String pattern = patternFor(currentWord, guess);
+            if (!patternWordMap.containsKey(pattern)) {
+                Set<String> wordSet = new HashSet<>();
+                patternWordMap.put(pattern, wordSet);
+                wordSet.add(currentWord);
+            } else {
+                patternWordMap.get(pattern).add(currentWord);
+            }
+        }
+
+        String bestPattern = bestPattern(patternWordMap);
+
+        Set<String> matchingWords = (patternWordMap.get(bestPattern));
+       
+        words.clear();
+
+        words.addAll(matchingWords);
+
+        return bestPattern;
+    }
+
+
+    //B - Helper method for record to find the pattern that has the most amount 
+    // of words mapped to it
+    //R - returns a String to the record method (String of colored emojis), this string is the 
+    // pattern that has the most words in it, to give the user the least information possible.
+    //P - takes in Map<String, Set<String>> patternWordMap which is a map of pattern keys and
+    // a set of words that match that pattern.
+    public static String bestPattern(Map<String, Set<String>> patternWordMap) {
+
+        String bestPattern = "";
+        int maxWords = 0;
+
+        for (String pattern : patternWordMap.keySet()) {
+            Set<String> words = patternWordMap.get(pattern);
+            int numWords = words.size();
+
+            if (numWords > maxWords) {
+                maxWords = numWords;
+                bestPattern = pattern;
+            }
+        }
+        return bestPattern;
+    }
+
+
+    //B - when given a guess, this method generates a pattern of colored emojis 
+    // that correspond to exact and approximate matches as well as unused characters
+    //R - returns String pattern, the String of colored emojis
+    //P - takes String word and String guess as parameters. guess is the user's 
+    // guess, and word is the word the user is trying to guess, developes the 
+    // pattern using these strings to find the correct colors.
+    public static String patternFor(String word, String guess) {
+
+        List<String> guessAsCharList = new ArrayList<>();
+        Map<Character, Integer> counts = new HashMap<>();
+
+        populateDataStructures(word, guess, guessAsCharList, counts);
+
+        // Mark all exact matches:
+        for (int i = 0; i < word.length(); i++) {
+            String currentChar = "" + word.charAt(i);
+            if (guessAsCharList.get(i).equalsIgnoreCase(currentChar)) {
+                guessAsCharList.set(i, GREEN);
+                counts.put(word.charAt(i), counts.get(word.charAt(i)) - 1);
+            } 
+        }
+        System.out.println(counts);
+
+        // Mark all approximate matches:
+        for (int i = 0; i < word.length(); i++) {
+            char currentChar = guess.charAt(i);
+            if (!guessAsCharList.get(i).equals(GREEN) && 
+            counts.containsKey(currentChar) && counts.get(currentChar) > 0) {
+                guessAsCharList.set(i, YELLOW);
+                counts.put(currentChar, counts.get(currentChar) - 1);
+            }
+        }
+
+        // Mark all unused characters
+        for (int i = 0; i < word.length(); i++) {
+            if (!guessAsCharList.get(i).equals(GREEN) && 
+            !guessAsCharList.get(i).equals(YELLOW)) { 
+                guessAsCharList.set(i, GRAY);
+                counts.put(word.charAt(i), counts.get(word.charAt(i)) - 1);
+            }
+        }
+
+        String pattern = "";
+        for (int i = 0; i < guessAsCharList.size(); i++) {
+            pattern += guessAsCharList.get(i);
+        }     
+        return pattern;
+    }
+
+
+    //B - helper method for patternFor. populates the data structures created in that method
+    //P - String word, String guess, List<String> guessAsCharList, Map<Character, 
+    // Integer> counts. Word is the word the user is trying to guess, guess is the 
+    // user's guess they type to the console, guessAsCharList gets populated to be 
+    // the guess broken down into characters, and counts gets populated to be the number 
+    // of times each character appears within the guess.
+    public static void populateDataStructures (String word, String guess, List<String> 
+    guessAsCharList, Map<Character, Integer> counts) {
+
+        for (int i = 0; i < guess.length(); i++) { // populates list
+            String guessChar = "" + guess.charAt(i);
+            guessAsCharList.add(guessChar);
+        } 
+
+        for (int i = 0; i < word.length(); i++) { // populates map
+            char currentChar = word.charAt(i);
+            if (!counts.containsKey(currentChar)) {
+                counts.put(currentChar, 1);
+            } else {
+                counts.put(currentChar, counts.get(currentChar) + 1);
+            }
+        }
+    }
+}
